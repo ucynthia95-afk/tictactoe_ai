@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>井字棋 AI — Minimax + RL</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@300;500;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --card: #1a1a26;
+    --border: #2a2a3f;
+    --accent: #00e5ff;
+    --accent2: #ff4d6d;
+    --gold: #ffd700;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --win: #00ff88;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(0,229,255,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(255,77,109,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; width: 100%; max-width: 960px; }
+
+  header {
+    text-align: center;
+    padding: 30px 0 20px;
+  }
+
+  .title {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 20px;
+    align-items: start;
+    margin-top: 20px;
+  }
+
+  @media (max-width: 700px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .right-panel { order: -1; }
+  }
+
+  /* ===== BOARD ===== */
+  .board-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .status-bar {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--card);
+    text-align: center;
+    min-width: 260px;
+    letter-spacing: 0.05em;
+    transition: all 0.3s;
+  }
+
+  .status-bar.win { border-color: var(--win); color: var(--win); }
+  .status-bar.draw { border-color: var(--gold); color: var(--gold); }
+  .status-bar.thinking { border-color: var(--accent); color: var(--accent); }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .cell {
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 2.4rem;
+    font-weight: 700;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(0,229,255,0.15), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .cell:hover:not(.taken)::after { opacity: 1; }
+  .cell:hover:not(.taken) { border-color: var(--accent); transform: scale(1.03); }
+
+  .cell.X { color: var(--accent); }
+  .cell.O { color: var(--accent2); }
+  .cell.win-cell { background: rgba(0,255,136,0.08); border-color: var(--win); }
+  .cell.taken { cursor: default; }
+
+  .cell-inner {
+    display: inline-block;
+    transform: scale(0);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .cell.placed .cell-inner { transform: scale(1); }
+
+  .board-controls {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,0.08); }
+  .btn.primary:hover { background: rgba(0,229,255,0.15); }
+  .btn.danger:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ===== MODE SELECTOR ===== */
+  .mode-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .mode-btn {
+    font-size: 0.7rem;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+
+  .mode-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,0.08); }
+
+  /* ===== SIDE PANELS ===== */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .panel-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .stat-box {
+    text-align: center;
+    padding: 12px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+  }
+
+  .stat-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    display: block;
+  }
+
+  .stat-num.X { color: var(--accent); }
+  .stat-num.draw { color: var(--gold); }
+  .stat-num.O { color: var(--accent2); }
+  .stat-label { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px; }
+
+  .win-rate-bar {
+    height: 6px;
+    background: var(--surface);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 10px;
+  }
+
+  .win-rate-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+
+  /* RL Panel */
+  .rl-section { margin-top: 20px; }
+
+  .rl-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.65rem;
+    color: var(--gold);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 3px;
+    padding: 3px 8px;
+    margin-bottom: 12px;
+    background: rgba(255,215,0,0.06);
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.08em;
+  }
+
+  .pulse {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .rl-info {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .rl-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .rl-stat { font-size: 0.72rem; }
+  .rl-stat-key { color: var(--muted); font-size: 0.65rem; }
+  .rl-stat-val { font-family: 'Space Mono', monospace; color: var(--accent); font-size: 0.9rem; }
+
+  .btn-train {
+    width: 100%;
+    padding: 10px;
+    font-size: 0.75rem;
+    border: 1px solid rgba(255,215,0,0.4);
+    border-radius: 4px;
+    background: rgba(255,215,0,0.06);
+    color: var(--gold);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+
+  .btn-train:hover { background: rgba(255,215,0,0.12); border-color: var(--gold); }
+  .btn-train:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .train-progress {
+    margin-top: 10px;
+    height: 4px;
+    background: var(--surface);
+    border-radius: 2px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .train-progress.active { display: block; }
+
+  .train-progress-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.1s;
+  }
+
+  /* Q-table size */
+  .qtable-info {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 8px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* Move log */
+  .log-list {
+    list-style: none;
+    max-height: 140px;
+    overflow-y: auto;
+    font-size: 0.68rem;
+    font-family: 'Space Mono', monospace;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .log-list li {
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .log-list li:first-child { color: var(--text); }
+  .log-tag { padding: 1px 5px; border-radius: 2px; font-size: 0.6rem; }
+  .log-tag.W { background: rgba(0,255,136,0.15); color: var(--win); }
+  .log-tag.L { background: rgba(255,77,109,0.15); color: var(--accent2); }
+  .log-tag.D { background: rgba(255,215,0,0.15); color: var(--gold); }
+
+  /* Difficulty */
+  .diff-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .diff-btn {
+    font-size: 0.65rem;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.15s;
+  }
+
+  .diff-btn.active { border-color: var(--accent2); color: var(--accent2); background: rgba(255,77,109,0.08); }
+
+  /* Thinking dots */
+  .dots::after {
+    content: '...';
+    animation: dots 1s steps(4, end) infinite;
+  }
+  @keyframes dots {
+    0%{content:'.'}
+    33%{content:'..'}
+    66%{content:'...'}
+    100%{content:'.'}
+  }
+
+  footer {
+    text-align: center;
+    margin-top: 30px;
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.1em;
+    padding-bottom: 20px;
+  }
+
+  .separator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--border);
+    font-size: 0.6rem;
+  }
+
+  .sep-line { width: 1px; height: 80px; background: var(--border); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="title">井字棋 AI ENGINE</div>
+    <div class="subtitle">Minimax Alpha-Beta × Q-Learning Self-Play</div>
+  </header>
+
+  <div class="main-grid">
+    <!-- LEFT: Stats + Log -->
+    <div class="left-panel">
+      <div class="panel">
+        <div class="panel-title">戰績統計</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <span class="stat-num X" id="wins">0</span>
+            <div class="stat-label">勝利</div>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num draw" id="draws">0</span>
+            <div class="stat-label">平局</div>
+          </div>
+          <div class="stat-box">
+            <span class="stat-num O" id="losses">0</span>
+            <div class="stat-label">敗北</div>
+          </div>
+        </div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:4px;">玩家勝率</div>
+        <div class="win-rate-bar">
+          <div class="win-rate-fill" id="win-rate-fill" style="width:0%"></div>
+        </div>
+        <div style="font-size:0.65rem;color:var(--muted);text-align:right;margin-top:4px;" id="win-rate-text">0%</div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">對局紀錄</div>
+        <ul class="log-list" id="log-list">
+          <li style="color:var(--muted);justify-content:center;">尚無紀錄</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- CENTER: Board -->
+    <div class="board-section">
+      <!-- Mode -->
+      <div class="mode-group">
+        <button class="mode-btn active" id="mode-pvai" onclick="setMode('pvai')">人 vs AI</button>
+        <button class="mode-btn" id="mode-pvp" onclick="setMode('pvp')">人 vs 人</button>
+        <button class="mode-btn" id="mode-aivai" onclick="setMode('aivai')">AI vs AI</button>
+      </div>
+
+      <!-- AI vs AI strategy picker (only shown in aivai mode) -->
+      <div id="aivai-config" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px 16px;width:100%;max-width:300px;">
+        <div style="font-size:0.62rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px;">對戰策略設定</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <div style="font-size:0.65rem;color:var(--accent);font-family:'Space Mono',monospace;margin-bottom:6px;">AI X</div>
+            <div style="display:flex;flex-direction:column;gap:4px;" id="ax-btns">
+              <button class="diff-btn active" onclick="setAIStrategy('X','minimax')">Minimax</button>
+              <button class="diff-btn" onclick="setAIStrategy('X','medium')">中等</button>
+              <button class="diff-btn" onclick="setAIStrategy('X','random')">隨機</button>
+              <button class="diff-btn" onclick="setAIStrategy('X','rl')">🎓 RL</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.65rem;color:var(--accent2);font-family:'Space Mono',monospace;margin-bottom:6px;">AI O</div>
+            <div style="display:flex;flex-direction:column;gap:4px;" id="ao-btns">
+              <button class="diff-btn active" onclick="setAIStrategy('O','minimax')">Minimax</button>
+              <button class="diff-btn" onclick="setAIStrategy('O','medium')">中等</button>
+              <button class="diff-btn" onclick="setAIStrategy('O','random')">隨機</button>
+              <button class="diff-btn" onclick="setAIStrategy('O','rl')">🎓 RL</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-bar" id="status">按下棋盤開始遊戲</div>
+
+      <div class="board" id="board">
+        <!-- cells generated by JS -->
+      </div>
+
+      <div class="board-controls">
+        <button class="btn primary" onclick="resetGame()">新局</button>
+        <button class="btn danger" onclick="resetStats()">清除紀錄</button>
+      </div>
+
+      <!-- Difficulty -->
+      <div style="margin-top:4px;">
+        <div style="font-size:0.65rem;color:var(--muted);margin-bottom:6px;text-align:center;letter-spacing:0.1em;text-transform:uppercase;">AI 難度</div>
+        <div class="diff-row" style="justify-content:center;">
+          <button class="diff-btn" id="diff-easy" onclick="setDiff('easy')">簡單</button>
+          <button class="diff-btn" id="diff-medium" onclick="setDiff('medium')">中等</button>
+          <button class="diff-btn active" id="diff-hard" onclick="setDiff('hard')">困難</button>
+          <button class="diff-btn" id="diff-rl" onclick="setDiff('rl')">🎓 RL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: RL Training -->
+    <div class="right-panel">
+      <div class="panel">
+        <div class="panel-title">強化學習模組</div>
+
+        <div class="rl-badge">
+          <div class="pulse"></div>
+          Q-LEARNING
+        </div>
+
+        <div class="rl-info">
+          AI 透過<strong style="color:var(--text)">自我對弈</strong>學習策略。<br>
+          每局後根據結果更新 Q-table，<br>
+          累積越多局，選擇越趨於最優。
+        </div>
+
+        <div class="rl-stats">
+          <div class="rl-stat">
+            <div class="rl-stat-key">訓練對局</div>
+            <div class="rl-stat-val" id="rl-games">0</div>
+          </div>
+          <div class="rl-stat">
+            <div class="rl-stat-key">學習率 α</div>
+            <div class="rl-stat-val">0.3</div>
+          </div>
+          <div class="rl-stat">
+            <div class="rl-stat-key">折扣率 γ</div>
+            <div class="rl-stat-val">0.9</div>
+          </div>
+          <div class="rl-stat">
+            <div class="rl-stat-key">探索率 ε</div>
+            <div class="rl-stat-val" id="rl-epsilon">1.00</div>
+          </div>
+        </div>
+
+        <div class="qtable-info" id="qtable-size">Q-table: 0 狀態</div>
+
+        <button class="btn-train" id="btn-train" onclick="trainRL()">
+          ⚡ 自我對弈訓練 (5000局)
+        </button>
+        <div class="train-progress" id="train-progress">
+          <div class="train-progress-fill" id="train-fill"></div>
+        </div>
+
+        <div class="rl-section">
+          <div style="font-size:0.65rem;color:var(--muted);margin-top:12px;line-height:1.7;">
+            <div style="color:var(--text);margin-bottom:4px;">演算法說明</div>
+            Bellman 方程式更新：<br>
+            <span style="color:var(--accent);font-family:'Space Mono',monospace;font-size:0.62rem;">
+              Q(s,a) ← Q(s,a) + α[r + γ·max Q(s') - Q(s,a)]
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">演算法比較</div>
+        <div style="font-size:0.7rem;line-height:1.8;color:var(--muted);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="color:var(--text)">Minimax</span>
+            <span style="color:var(--win)">完美解</span>
+          </div>
+          <div style="font-size:0.62rem;margin-bottom:10px;">窮舉所有可能，保證最優解，但空間固定</div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="color:var(--text)">Q-Learning</span>
+            <span style="color:var(--gold)">學習解</span>
+          </div>
+          <div style="font-size:0.62rem;">從經驗學習，可擴展到更複雜的遊戲</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>MINIMAX × ALPHA-BETA PRUNING × Q-LEARNING SELF-PLAY — TICTACTOE AI v2.0</footer>
+</div>
+
+<script>
+// ==================== GAME STATE ====================
+let board = Array(9).fill(null);
+let currentPlayer = 'X'; // X = human, O = AI
+let gameOver = false;
+let mode = 'pvai'; // pvai, pvp, aivai
+let difficulty = 'hard';
+let stats = { wins: 0, draws: 0, losses: 0 };
+let gameLog = [];
+let aiThinking = false;
+let gameCount = 0;
+let aiXStrategy = 'minimax'; // for AI vs AI: 'minimax' | 'rl' | 'random'
+let aiOStrategy = 'minimax';
+
+// ==================== Q-LEARNING ====================
+const ALPHA = 0.3, GAMMA = 0.9;
+let epsilon = 1.0;
+let qTable = {};
+let rlTrainedGames = 0;
+
+function stateKey(b) { return b.map(v => v || '-').join(''); }
+
+function getQ(state, action) {
+  if (!qTable[state]) qTable[state] = {};
+  return qTable[state][action] ?? 0;
+}
+
+function setQ(state, action, val) {
+  if (!qTable[state]) qTable[state] = {};
+  qTable[state][action] = val;
+}
+
+function rlChooseAction(b, player, eps = epsilon) {
+  const empties = b.map((v,i) => v === null ? i : -1).filter(i => i >= 0);
+  if (Math.random() < eps) return empties[Math.floor(Math.random() * empties.length)];
+  const key = stateKey(b);
+  let best = -Infinity, bestAction = empties[0];
+  for (const a of empties) {
+    const q = getQ(key, a);
+    if (q > best) { best = q; bestAction = a; }
+  }
+  return bestAction;
+}
+
+function rlUpdate(state, action, reward, nextBoard) {
+  const nextEmpties = nextBoard.map((v,i) => v === null ? i : -1).filter(i => i >= 0);
+  let maxNextQ = nextEmpties.length === 0 ? 0 : Math.max(...nextEmpties.map(a => getQ(stateKey(nextBoard), a)));
+  const old = getQ(state, action);
+  setQ(state, action, old + ALPHA * (reward + GAMMA * maxNextQ - old));
+}
+
+function trainRL() {
+  const GAMES = 5000;
+  const btn = document.getElementById('btn-train');
+  const prog = document.getElementById('train-progress');
+  const fill = document.getElementById('train-fill');
+  btn.disabled = true;
+  prog.classList.add('active');
+
+  let i = 0;
+  function runBatch() {
+    const batchSize = 200;
+    for (let b = 0; b < batchSize && i < GAMES; b++, i++) {
+      // Self-play game
+      let gameBoard = Array(9).fill(null);
+      let eps = Math.max(0.05, epsilon * 0.9997);
+      let history = []; // {state, action, player}
+      let p = 'X';
+      while (true) {
+        const state = stateKey(gameBoard);
+        const action = rlChooseAction(gameBoard, p, eps);
+        history.push({state, action, player: p});
+        gameBoard[action] = p;
+        const winner = checkWinner(gameBoard);
+        if (winner || !gameBoard.includes(null)) {
+          // Assign rewards
+          for (let h = history.length - 1; h >= 0; h--) {
+            const {state: s, action: a, player: hp} = history[h];
+            let r = 0;
+            if (winner) r = hp === winner ? 1 : -1;
+            const nextIdx = h + 1 < history.length ? h + 1 : h;
+            // simplified: use terminal reward
+            rlUpdate(s, a, r, gameBoard);
+          }
+          break;
+        }
+        p = p === 'X' ? 'O' : 'X';
+      }
+      rlTrainedGames++;
+    }
+    epsilon = Math.max(0.05, epsilon * Math.pow(0.9997, batchSize));
+    fill.style.width = (i / GAMES * 100) + '%';
+    document.getElementById('rl-games').textContent = rlTrainedGames.toLocaleString();
+    document.getElementById('rl-epsilon').textContent = epsilon.toFixed(2);
+    document.getElementById('qtable-size').textContent = `Q-table: ${Object.keys(qTable).length} 狀態`;
+
+    if (i < GAMES) {
+      setTimeout(runBatch, 0);
+    } else {
+      btn.disabled = false;
+      btn.textContent = `⚡ 再訓練 5000 局`;
+      prog.classList.remove('active');
+      updateStatus('RL 訓練完成！切換難度到 🎓 RL 來挑戰訓練後的AI', '');
+    }
+  }
+  runBatch();
+}
+
+// ==================== MINIMAX ====================
+function checkWinner(b) {
+  const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for (const [a,c,d] of lines) {
+    if (b[a] && b[a] === b[c] && b[a] === b[d]) return b[a];
+  }
+  return null;
+}
+
+function getWinLine(b) {
+  const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for (const line of lines) {
+    const [a,c,d] = line;
+    if (b[a] && b[a] === b[c] && b[a] === b[d]) return line;
+  }
+  return null;
+}
+
+function minimax(b, isMax, alpha, beta, depth) {
+  const winner = checkWinner(b);
+  if (winner === 'O') return 10 - depth;
+  if (winner === 'X') return depth - 10;
+  if (!b.includes(null)) return 0;
+
+  if (isMax) {
+    let best = -Infinity;
+    for (let i = 0; i < 9; i++) {
+      if (!b[i]) {
+        b[i] = 'O';
+        best = Math.max(best, minimax(b, false, alpha, beta, depth + 1));
+        b[i] = null;
+        alpha = Math.max(alpha, best);
+        if (beta <= alpha) break;
+      }
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (let i = 0; i < 9; i++) {
+      if (!b[i]) {
+        b[i] = 'X';
+        best = Math.min(best, minimax(b, true, alpha, beta, depth + 1));
+        b[i] = null;
+        beta = Math.min(beta, best);
+        if (beta <= alpha) break;
+      }
+    }
+    return best;
+  }
+}
+
+function getMinimaxMove(b, forPlayer) {
+  const isMaxPlayer = forPlayer === 'O';
+  let bestScore = isMaxPlayer ? -Infinity : Infinity;
+  let candidates = [];
+  for (let i = 0; i < 9; i++) {
+    if (!b[i]) {
+      b[i] = forPlayer;
+      const score = minimax(b, forPlayer === 'X', -Infinity, Infinity, 0);
+      b[i] = null;
+      if (isMaxPlayer ? score > bestScore : score < bestScore) {
+        bestScore = score; candidates = [i];
+      } else if (score === bestScore) {
+        candidates.push(i);
+      }
+    }
+  }
+  // Random tie-breaking so AI vs AI produces different games each round
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function getBestMove(b, forPlayer = 'O') {
+  const strategy = mode === 'aivai'
+    ? (forPlayer === 'X' ? aiXStrategy : aiOStrategy)
+    : difficulty;
+  const empties = b.map((v,i) => v===null ? i : -1).filter(i => i >= 0);
+
+  if (strategy === 'random' || strategy === 'easy') {
+    return empties[Math.floor(Math.random() * empties.length)];
+  }
+  if (strategy === 'rl') {
+    return rlTrainedGames > 0 ? rlChooseAction(b, forPlayer, 0) : getMinimaxMove(b, forPlayer);
+  }
+  if (strategy === 'medium') {
+    if (Math.random() < 0.5) return empties[Math.floor(Math.random() * empties.length)];
+  }
+  return getMinimaxMove(b, forPlayer);
+}
+
+// ==================== UI ====================
+function renderBoard() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell' + (board[i] ? ` ${board[i]} taken placed` : '');
+    cell.onclick = () => handleClick(i);
+    const inner = document.createElement('span');
+    inner.className = 'cell-inner';
+    inner.textContent = board[i] || '';
+    cell.appendChild(inner);
+    boardEl.appendChild(cell);
+  }
+}
+
+function highlightWin(line) {
+  const cells = document.getElementById('board').children;
+  for (const idx of line) cells[idx].classList.add('win-cell');
+}
+
+function updateStatus(msg, cls) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status-bar' + (cls ? ' ' + cls : '');
+}
+
+function updateStats() {
+  document.getElementById('wins').textContent = stats.wins;
+  document.getElementById('draws').textContent = stats.draws;
+  document.getElementById('losses').textContent = stats.losses;
+  const total = stats.wins + stats.draws + stats.losses;
+  const rate = total ? Math.round(stats.wins / total * 100) : 0;
+  document.getElementById('win-rate-fill').style.width = rate + '%';
+  document.getElementById('win-rate-text').textContent = rate + '%';
+}
+
+function addLog(result) {
+  gameCount++;
+  const list = document.getElementById('log-list');
+  if (list.children.length === 1 && list.children[0].style.justifyContent === 'center') {
+    list.innerHTML = '';
+  }
+  const li = document.createElement('li');
+  const labels = { W: '勝利', L: '敗北', D: '平局' };
+  li.innerHTML = `<span>#${gameCount} 第${gameCount}局</span><span class="log-tag ${result}">${labels[result]}</span>`;
+  list.insertBefore(li, list.firstChild);
+  if (list.children.length > 20) list.removeChild(list.lastChild);
+}
+
+// ==================== GAME LOGIC ====================
+function handleClick(idx) {
+  if (gameOver || board[idx] || aiThinking) return;
+  if (mode === 'pvai' && currentPlayer !== 'X') return;
+  if (mode === 'aivai') return;
+
+  placeMove(idx, currentPlayer);
+  if (!gameOver) {
+    if (mode === 'pvai') {
+      aiThinking = true;
+      updateStatus('AI 思考中', 'thinking');
+      setTimeout(() => {
+        const move = getBestMove([...board]);
+        if (move !== -1) placeMove(move, 'O');
+        aiThinking = false;
+      }, 300);
+    }
+  }
+}
+
+function placeMove(idx, player) {
+  board[idx] = player;
+  renderBoard();
+
+  const winner = checkWinner(board);
+  if (winner) {
+    const line = getWinLine(board);
+    setTimeout(() => { if (line) highlightWin(line); }, 50);
+    gameOver = true;
+
+    if (mode === 'pvai') {
+      if (winner === 'X') {
+        updateStatus('🎉 你贏了！', 'win');
+        stats.wins++; addLog('W');
+      } else {
+        updateStatus('😞 AI 獲勝', '');
+        stats.losses++; addLog('L');
+      }
+    } else if (mode === 'pvp') {
+      updateStatus(`🎉 玩家 ${winner} 獲勝！`, 'win');
+    } else {
+      updateStatus(`AI ${winner} 獲勝`, 'win');
+    }
+    updateStats();
+    return;
+  }
+
+  if (!board.includes(null)) {
+    gameOver = true;
+    updateStatus('🤝 平局！', 'draw');
+    if (mode === 'pvai') { stats.draws++; addLog('D'); updateStats(); }
+    return;
+  }
+
+  currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+
+  if (mode === 'pvai') {
+    updateStatus(currentPlayer === 'X' ? '你的回合 (X)' : 'AI 思考中', currentPlayer === 'O' ? 'thinking' : '');
+  } else if (mode === 'pvp') {
+    updateStatus(`玩家 ${currentPlayer} 的回合`);
+  } else {
+    // AI vs AI
+    if (!gameOver) {
+      setTimeout(() => {
+        const move = getBestMove([...board], currentPlayer);
+        if (move !== -1) placeMove(move, currentPlayer);
+      }, 400);
+    }
+  }
+}
+
+function resetGame() {
+  board = Array(9).fill(null);
+  currentPlayer = 'X';
+  gameOver = false;
+  aiThinking = false;
+  renderBoard();
+
+  if (mode === 'pvai') updateStatus('你的回合 (X)');
+  else if (mode === 'pvp') updateStatus('玩家 X 的回合');
+  else {
+    updateStatus('AI 對戰中');
+    setTimeout(() => {
+      const move = getBestMove([...board], 'X');
+      if (move !== -1) placeMove(move, 'X');
+    }, 500);
+  }
+}
+
+function resetStats() {
+  stats = { wins: 0, draws: 0, losses: 0 };
+  gameCount = 0;
+  gameLog = [];
+  document.getElementById('log-list').innerHTML = '<li style="color:var(--muted);justify-content:center;">尚無紀錄</li>';
+  updateStats();
+}
+
+function setMode(m) {
+  mode = m;
+  ['pvai','pvp','aivai'].forEach(id => {
+    document.getElementById('mode-' + id).classList.toggle('active', id === m);
+  });
+  document.getElementById('aivai-config').style.display = m === 'aivai' ? 'block' : 'none';
+  resetGame();
+}
+
+function setDiff(d) {
+  difficulty = d;
+  ['easy','medium','hard','rl'].forEach(id => {
+    document.getElementById('diff-' + id).classList.toggle('active', id === d);
+  });
+  if (d === 'rl' && rlTrainedGames === 0) {
+    updateStatus('請先訓練 RL 模型！', '');
+  }
+}
+
+function setAIStrategy(player, strategy) {
+  if (player === 'X') {
+    aiXStrategy = strategy;
+    document.querySelectorAll('#ax-btns .diff-btn').forEach((b,i) => {
+      b.classList.toggle('active', ['minimax','medium','random','rl'][i] === strategy);
+    });
+  } else {
+    aiOStrategy = strategy;
+    document.querySelectorAll('#ao-btns .diff-btn').forEach((b,i) => {
+      b.classList.toggle('active', ['minimax','medium','random','rl'][i] === strategy);
+    });
+  }
+  resetGame();
+}
+
+// Init
+renderBoard();
+updateStatus('你的回合 (X)');
+</script>
+</body>
+</html>
