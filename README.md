@@ -198,7 +198,7 @@ Analysis:
 **尤舒筠**
 - 就讀：國立臺北科技大學 電資學士班 一年級
 - GitHub: [@ucynthia95-afk](https://github.com/ucynthia95-afk)
-- Email: [exit137shuyunyu@gmail.com]
+- Email: exit137shuyunyu@gmail.com
 
 ---
 
