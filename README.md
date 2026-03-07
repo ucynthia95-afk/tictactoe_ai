@@ -171,9 +171,9 @@ Analysis:
 
 ---
 
-## 🎓 背景說明
+## 背景說明
 
-這是我作為大一新生，為了準備中研院資訊所暑期實習申請而進行的自主學習專案。目標是：
+這是我為了準備中研院資訊所暑期實習申請而進行的自主學習專案。目標是：
 
 1. 深入理解 AI 基礎演算法（Minimax）
 2. 實際動手實作，而非只讀理論
@@ -198,7 +198,7 @@ Analysis:
 **尤舒筠**
 - 就讀：國立臺北科技大學 電資學士班 一年級
 - GitHub: [@ucynthia95-afk](https://github.com/ucynthia95-afk)
-- Email: [你的email@mail.ntut.edu.tw]
+- Email: [exit137shuyunyu@gmail.com]
 
 ---
 
@@ -211,7 +211,7 @@ Analysis:
 ## 未來規劃
 
 - [ ] 實作更進階的搜尋演算法（Monte Carlo Tree Search）
-- [ ] 擴展到更複雜的棋類遊戲（五子棋、黑白棋）（正在進行五子棋專案）
+- [ ] 擴展到更複雜的棋類遊戲（五子棋、黑白棋）（正在進行五子棋專案，預計透過 C 語言代替 Python 執行核心程式）
 - [ ] 深入研究深度強化學習（Deep Q-Network）
 - [ ] 優化 GUI 介面與使用者體驗
 
