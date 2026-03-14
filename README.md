@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | `tictactoe.py` | Python 終端機版（人 vs AI） | **自己實作** |
 | `tictactoe_gui.py` | Python tkinter GUI 版 | **自己實作** |
-| `analysis.py` | AI 效能分析工具 | **自己實作** |
+| `analysis.py` | AI 效能分析工具 | **自己實作**+LLM 輔助開發 |
 | `tictactoe_ai.html` | 網頁版（含 AI vs AI、Q-Learning 訓練） | LLM 輔助開發 |
 
 ---
@@ -224,5 +224,3 @@ Q(s,a) ← Q(s,a) + α[r + γ·max Q(s') - Q(s,a)]
 ---
 
 **最後更新：2026年3月**
-
-*這個專案記錄了我從零開始學習 AI 演算法的歷程。每一行程式碼都是我對 AI 領域探索的見證。*
