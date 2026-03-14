@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | `tictactoe.py` | Python 終端機版（人 vs AI） | **自己實作** |
 | `tictactoe_gui.py` | Python tkinter GUI 版 | **自己實作** |
-| `analysis.py` | AI 效能分析工具 | **自己實作**+LLM 輔助開發 |
+| `analysis.py` | AI 效能分析工具 | **自己實作** |
 | `tictactoe_ai.html` | 網頁版（含 AI vs AI、Q-Learning 訓練） | LLM 輔助開發 |
 
 ---
