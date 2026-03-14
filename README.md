@@ -125,21 +125,27 @@ Q(s,a) ← Q(s,a) + α[r + γ·max Q(s') - Q(s,a)]
 執行 `python analysis.py` 的實測結果：
 
 ```
-==================================================
-SIMULATION RESULTS (100 games)
-==================================================
-Total Games Played: 100
-Average Time per Game: 0.0385 seconds
+============================================================
+測試結果 (Test Results)
+============================================================
+總場次 (Total Games): 100
+總時間 (Total Time): 3.50 秒
+平均每場時間 (Avg Time/Game): 0.0350 秒
 
-Outcomes:
-  Minimax AI Wins: 86 (86.0%)
-  Random AI Wins:  0 (0.0%)
-  Draws:           14 (14.0%)
+結果統計 (Outcomes):
+  Minimax AI 獲勝:   94 場 ( 94.0%)
+  隨機 AI 獲勝:       0 場 (  0.0%)
+  平手:              6 場 (  6.0%)
 
-Analysis:
-  ✓ Minimax AI never lost - perfect play achieved!
-  ✓ Minimax AI demonstrates strong performance (>80% win rate)
-==================================================
+效能分析 (Performance Analysis):
+  ✓ Minimax AI 從未輸過 - 達成完美表現！
+  ✓ Perfect play achieved - AI never lost!
+  ✓ Minimax AI 勝率超過 80% - 表現優異
+  ✓ Win rate > 80% - Excellent performance
+
+  最終勝率 (Final Win Rate): 94.0%
+  不敗率 (Undefeated Rate): 100.0%
+============================================================
 ```
 
 **發現與結論：**
